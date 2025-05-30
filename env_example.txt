@@ -1,0 +1,17 @@
+# 环境变量配置示例
+# 请将此文件复制为 .env 并填入真实的API密钥
+
+# OpenAI API配置 (必需)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# 可选：OpenAI API基础URL (如果使用代理)
+# OPENAI_API_BASE=https://api.openai.com/v1
+
+# 可选：模型设置 (默认使用gpt-3.5-turbo)
+# OPENAI_MODEL=gpt-3.5-turbo
+
+# 使用说明：
+# 1. 将此文件复制为 .env
+# 2. 替换 your_openai_api_key_here 为您的真实OpenAI API密钥
+# 3. 如需使用其他配置，取消注释相应行并修改值 
+ 
