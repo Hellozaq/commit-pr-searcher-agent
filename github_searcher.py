@@ -22,6 +22,7 @@ class GitHubSearcher:
         self.token_manager = token_manager
         self.ai_helper = ai_helper
         self.max_diff_size = max_diff_size
+        self.max_file_size = 5000  # 单个文件的最大大小
         self.search_results = []
         
     def _get_github_client(self) -> Optional[Github]:
@@ -69,7 +70,9 @@ class GitHubSearcher:
                         'date': commit.commit.committer.date.isoformat(),
                         'author': commit.commit.author.name,
                         'repository': commit.repository.full_name,
-                        'files': []
+                        'files': [],
+                        'checked': 0, 
+                        'note': ''
                     }
                     
                     # 获取文件列表
@@ -106,7 +109,7 @@ class GitHubSearcher:
             
             # 构建搜索查询，添加类型和日期限制
             date_query = f"created:{start_date}..{end_date}"
-            full_query = f"{query} type:pr {date_query}"
+            full_query = f"{query} type:pr is:merged {date_query}"
             
             logger.info(f"搜索pull requests: {full_query}")
             
@@ -135,7 +138,9 @@ class GitHubSearcher:
                         'author': pr.user.login,
                         'repository': pr.base.repo.full_name,
                         'state': pr.state,
-                        'files': []
+                        'files': [],
+                        'checked': 0,
+                        'note': ''
                     }
                     
                     # 获取文件列表
@@ -164,26 +169,62 @@ class GitHubSearcher:
     
     def _apply_file_filter(self, items: List[Dict[str, Any]], 
                           file_filter_regex: str) -> List[Dict[str, Any]]:
-        """应用文件过滤条件"""
-        if not file_filter_regex.strip():
+        """应用文件过滤"""
+        if not file_filter_regex:
             return items
+            
+        filtered_items = []
+        patterns = [pattern.strip() for pattern in file_filter_regex.split(';')]
         
-        try:
-            pattern = re.compile(file_filter_regex)
-            filtered_items = []
-            
-            for item in items:
-                files = item.get('files', [])
-                if any(pattern.search(file) for file in files):
-                    filtered_items.append(item)
-            
-            logger.info(f"文件过滤后剩余 {len(filtered_items)} 个结果")
-            return filtered_items
-            
-        except re.error as e:
-            logger.error(f"正则表达式错误: {e}")
-            return items
+        for item in items:
+            # 检查文件列表
+            if not item['files']:
+                continue
+                
+            # 如果任何一个文件匹配任何一个模式，就保留这个item
+            if any(any(re.search(pattern, f) for pattern in patterns) for f in item['files']):
+                filtered_items.append(item)
+        
+        logger.info(f"文件过滤后剩余 {len(filtered_items)} 个结果")
+        return filtered_items
     
+    def _check_files_match_patterns(self, files: List[str], patterns: List[re.Pattern]) -> bool:
+        """检查文件列表是否满足所有过滤条件
+        
+        Args:
+            files: 文件列表
+            patterns: 正则表达式模式列表
+            
+        Returns:
+            是否满足所有条件
+        """
+        # 对于每个模式，检查是否至少有一个文件匹配
+        for pattern in patterns:
+            if not any(pattern.search(file) for file in files):
+                return False
+        return True
+    
+    def _filter_diff_files(self, files: List[Any]) -> List[Any]:
+        """过滤diff文件"""
+        selected_files = []
+        java_file_count = 0
+        
+        for file in files:
+            # 检查是否是Java文件
+            if file.filename.endswith('.java'):
+                java_file_count += 1
+                
+            # 检查文件大小
+            if file.patch and len(file.patch) <= self.max_file_size:
+                selected_files.append(file)
+        
+        # 如果Java文件数量超过30，返回空列表
+        if java_file_count > 30:
+            logger.warning(f"跳过过多的Java文件: {java_file_count}个")
+            return []
+            
+        return selected_files
+
     def _get_commit_diff(self, item: Dict[str, Any]) -> str:
         """获取commit的diff信息"""
         try:
@@ -194,8 +235,11 @@ class GitHubSearcher:
             repo = g.get_repo(item['repository'])
             commit = repo.get_commit(item['sha'])
             
+            # 过滤文件
+            selected_files = self._filter_diff_files(commit.files)
+            
             diff_text = ""
-            for file in commit.files:
+            for file in selected_files:
                 if file.patch:
                     diff_text += f"\n--- {file.filename} ---\n"
                     diff_text += file.patch
@@ -216,8 +260,11 @@ class GitHubSearcher:
             repo = g.get_repo(item['repository'])
             pr = repo.get_pull(item['number'])
             
+            # 过滤文件
+            selected_files = self._filter_diff_files(pr.get_files())
+            
             diff_text = ""
-            for file in pr.get_files():
+            for file in selected_files:
                 if file.patch:
                     diff_text += f"\n--- {file.filename} ---\n"
                     diff_text += file.patch
@@ -255,7 +302,8 @@ class GitHubSearcher:
                     item['title'], 
                     item['message'], 
                     item['files'], 
-                    diff_summary
+                    diff_summary,
+                    item['url']
                 ):
                     filtered_items.append(item)
                 

@@ -37,8 +37,7 @@ def show_main_menu():
     print("1. 配置管理")
     print("2. Token管理")
     print("3. 启动搜索")
-    print("4. 列出所有配置")
-    print("5. 退出")
+    print("4. 退出")
 
 def show_config_menu():
     """显示配置管理菜单"""
@@ -46,7 +45,8 @@ def show_config_menu():
     print("1. 新建配置")
     print("2. 修改配置")
     print("3. 删除配置")
-    print("4. 返回主菜单")
+    print("4. 列出所有配置")
+    print("5. 返回主菜单")
 
 def main():
     """主程序"""
@@ -64,13 +64,13 @@ def main():
     while True:
         try:
             show_main_menu()
-            choice = input("\n请选择操作 (1-5): ").strip()
+            choice = input("\n请选择操作 (1-4): ").strip()
             
             if choice == '1':
                 # 配置管理
                 while True:
                     show_config_menu()
-                    config_choice = input("\n请选择操作 (1-4): ").strip()
+                    config_choice = input("\n请选择操作 (1-5): ").strip()
                     
                     if config_choice == '1':
                         agent.create_config_interactive()
@@ -79,6 +79,8 @@ def main():
                     elif config_choice == '3':
                         agent.delete_config_interactive()
                     elif config_choice == '4':
+                        agent.list_configs()
+                    elif config_choice == '5':
                         break
                     else:
                         print("无效的选择，请重新输入")
@@ -92,10 +94,6 @@ def main():
                 agent.search_interactive()
             
             elif choice == '4':
-                # 列出所有配置
-                agent.list_configs()
-            
-            elif choice == '5':
                 # 退出
                 print("感谢使用GitHub搜索Agent！")
                 break

@@ -107,7 +107,7 @@ class GitHubAgent:
                     ai_prompt = new_prompt
             
             # 获取文件过滤正则表达式
-            file_filter = input("请输入文件过滤正则表达式 (留空不过滤): ").strip()
+            file_filter = input("请输入文件过滤正则表达式（留空不过滤，若有多个表达式请用英文分号分隔，例如：\\.java$;\\.xml$ 表示匹配Java和XML文件）: ").strip()
             
             # 获取结果文件名
             result_file = input(f"请输入结果文件名 (默认: {name}_results.json): ").strip()
@@ -176,38 +176,42 @@ class GitHubAgent:
                 print("加载配置失败")
                 return False
             
+            # 显示当前配置
             print(f"\n当前配置 '{config_name}':")
             print(f"语言限制: {config.language}")
-            print(f"筛选描述: {config.filter_description}")
-            print(f"搜索关键词: {config.search_keywords}")
-            print(f"文件过滤: {config.file_filter_regex}")
+            print(f"关键词: {', '.join(config.search_keywords)}")
+            print(f"文件过滤正则表达式: {config.file_filter_regex}")
+            print(f"AI判断提示词: {config.ai_prompt}")
             print(f"结果文件: {config.result_file}")
             
-            # 修改字段
-            new_language = input(f"新的语言限制 (当前: {config.language}, 回车保持不变): ").strip()
-            if new_language:
-                config.language = new_language
+            # 选择要修改的字段
+            print("\n可修改的字段:")
+            print("1. 关键词")
+            print("2. 语言")
+            print("3. 文件过滤正则表达式")
+            print("4. AI判断提示词")
+            print("5. 取消修改")
             
-            new_description = input(f"新的筛选描述 (回车保持不变): ").strip()
-            if new_description:
-                config.filter_description = new_description
-                # 重新生成关键词和prompt
-                print("正在重新生成搜索关键词和AI判断prompt...")
-                ai_result = self.ai_helper.generate_search_keywords(new_description, config.language)
-                config.search_keywords = ai_result.get('keywords', config.search_keywords)
-                config.ai_prompt = ai_result.get('ai_prompt', config.ai_prompt)
+            choice = input("\n请选择要修改的字段 (1-5): ").strip()
             
-            new_keywords = input(f"新的关键词 (用逗号分隔, 回车保持不变): ").strip()
-            if new_keywords:
-                config.search_keywords = [k.strip() for k in new_keywords.split(',')]
-            
-            new_filter = input(f"新的文件过滤正则 (回车保持不变): ").strip()
-            if new_filter:
-                config.file_filter_regex = new_filter
-            
-            new_result_file = input(f"新的结果文件名 (回车保持不变): ").strip()
-            if new_result_file:
-                config.result_file = new_result_file
+            if choice == '1':
+                keywords = input("请输入新的关键词（多个关键词请用英文逗号分隔，例如：bug fix, enhancement, feature）: ").strip()
+                config.search_keywords = [k.strip() for k in keywords.split(',')]
+            elif choice == '2':
+                language = input("请输入新的语言（例如：java, python, javascript）: ").strip()
+                config.language = language
+            elif choice == '3':
+                file_filter = input("请输入新的文件过滤正则表达式（留空不过滤，若有多个表达式请用英文分号分隔，例如：\\.java$;\\.xml$ 表示匹配Java和XML文件）: ").strip()
+                config.file_filter_regex = file_filter
+            elif choice == '4':
+                ai_prompt = input("请输入新的AI判断提示词（用于判断commit/PR是否符合要求）: ").strip()
+                config.ai_prompt = ai_prompt
+            elif choice == '5':
+                print("取消修改")
+                return True
+            else:
+                print("无效的选择")
+                return False
             
             # 保存配置
             if self.config_manager.update_config(config):

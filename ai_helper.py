@@ -13,11 +13,16 @@ logger = logging.getLogger(__name__)
 class AIHelper:
     """AI助手，用于生成搜索关键词和判断搜索结果"""
     
-    def __init__(self, model_name: str = "gpt-3.5-turbo", temperature: float = 0.1):
+    def __init__(self, model_name: str = "glm-4-flash", temperature: float = 0.1):
+        api_key = os.getenv('API_KEY')
+        if not api_key:
+            raise ValueError("未找到API_KEY环境变量，请在.env文件中设置")
+            
         self.llm = ChatOpenAI(
             model_name=model_name,
             temperature=temperature,
-            openai_api_key=os.getenv('OPENAI_API_KEY')
+            openai_api_key=api_key,
+            openai_api_base="https://open.bigmodel.cn/api/paas/v4/"
         )
     
     def generate_search_keywords(self, description: str, language: str = "") -> Dict[str, Any]:
@@ -46,7 +51,9 @@ class AIHelper:
 AI判断prompt要求：
 1. 明确说明判断标准
 2. 要求AI返回明确的"是"或"否"
-3. 包含对commit/PR内容的具体要求"""
+3. 包含对commit/PR内容的具体要求
+
+请确保返回的是合法的JSON格式。"""
 
             language_info = f"\n编程语言限制: {language}" if language else ""
             
@@ -59,8 +66,21 @@ AI判断prompt要求：
                 HumanMessage(content=user_prompt)
             ]
             
-            response = self.llm(messages)
-            result = json.loads(response.content)
+            response = self.llm.invoke(messages)
+            content = response.content.strip()
+            
+            # 尝试从响应中提取JSON
+            try:
+                # 如果响应是纯JSON
+                result = json.loads(content)
+            except json.JSONDecodeError:
+                # 如果响应包含其他文本，尝试提取JSON部分
+                import re
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                if json_match:
+                    result = json.loads(json_match.group())
+                else:
+                    raise ValueError("无法从响应中提取JSON")
             
             logger.info(f"成功生成搜索关键词: {result.get('keywords', [])}")
             return result
@@ -74,7 +94,7 @@ AI判断prompt要求：
             }
     
     def judge_commit_pr(self, prompt: str, title: str, message: str, 
-                       files: List[str], diff_summary: str) -> bool:
+                       files: List[str], diff_summary: str, url: str) -> bool:
         """
         使用AI判断commit/PR是否符合要求
         
@@ -84,6 +104,7 @@ AI判断prompt要求：
             message: commit/PR消息
             files: 修改的文件列表
             diff_summary: diff摘要
+            url: commit/PR的URL
             
         Returns:
             是否符合要求
@@ -110,12 +131,13 @@ AI判断prompt要求：
                 HumanMessage(content=content)
             ]
             
-            response = self.llm(messages)
+            response = self.llm.invoke(messages)
             result = response.content.strip().lower()
             
             # 判断结果
             if "是" in result or "yes" in result:
                 logger.info(f"AI判断通过: {title}")
+                logger.info(f"链接: {url}")
                 return True
             else:
                 logger.info(f"AI判断未通过: {title}")
@@ -156,7 +178,7 @@ AI判断prompt要求：
                 HumanMessage(content=f"代码变更:\n{truncated_diff}")
             ]
             
-            response = self.llm(messages)
+            response = self.llm.invoke(messages)
             return response.content.strip()
             
         except Exception as e:
