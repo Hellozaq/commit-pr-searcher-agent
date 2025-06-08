@@ -169,20 +169,36 @@ class GitHubSearcher:
     
     def _apply_file_filter(self, items: List[Dict[str, Any]], 
                           file_filter_regex: str) -> List[Dict[str, Any]]:
-        """应用文件过滤"""
+        """应用文件过滤
+        
+        Args:
+            items: 要过滤的项目列表
+            file_filter_regex: 文件过滤正则表达式，多个条件用分号(;)分隔
+                             例如：".*.java;abc.txt" 表示必须同时包含.java文件和abc.txt文件
+            
+        Returns:
+            过滤后的项目列表
+        """
         if not file_filter_regex:
             return items
             
         filtered_items = []
-        patterns = [pattern.strip() for pattern in file_filter_regex.split(';')]
+        patterns = [pattern.strip() for pattern in file_filter_regex.split(';') if pattern.strip()]
         
         for item in items:
             # 检查文件列表
             if not item['files']:
                 continue
                 
-            # 如果任何一个文件匹配任何一个模式，就保留这个item
-            if any(any(re.search(pattern, f) for pattern in patterns) for f in item['files']):
+            # 检查是否所有模式都有匹配的文件
+            all_patterns_matched = True
+            for pattern in patterns:
+                # 如果任何一个模式没有匹配的文件，就跳过这个item
+                if not any(re.search(pattern, f) for f in item['files']):
+                    all_patterns_matched = False
+                    break
+            
+            if all_patterns_matched:
                 filtered_items.append(item)
         
         logger.info(f"文件过滤后剩余 {len(filtered_items)} 个结果")
