@@ -488,7 +488,9 @@ class GitHubAgent:
                 'type': result['type'],
                 'repository': result['repository'],
                 'date': result['date'],
-                'author': result['author']
+                'author': result['author'],
+                'checked': result.get('checked', 0),
+                'note': result.get('note', '')
             }
             formatted_results.append(formatted_result)
         
