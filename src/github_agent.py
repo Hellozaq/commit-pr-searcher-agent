@@ -1,5 +1,5 @@
-import json
 import os
+import json
 import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -8,7 +8,7 @@ from pathlib import Path
 from config_manager import ConfigManager, SearchConfig
 from token_manager import TokenManager
 from ai_helper import AIHelper
-from github_searcher import GitHubSearcher
+from .github_searcher import GitHubSearcher
 
 logger = logging.getLogger(__name__)
 
