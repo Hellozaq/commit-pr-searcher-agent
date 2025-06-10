@@ -241,8 +241,8 @@ class GitHubSearcher:
             if file.patch and len(file.patch) <= self.max_file_size:
                 selected_files.append(file)
         
-        # 如果文件数量超过30，返回空列表
-        if file_count > 30:
+        # 如果文件数量超过50，返回空列表
+        if file_count > 50:
             logger.warning(f"跳过过多的diff文件: {file_count}个")
             return []
             
