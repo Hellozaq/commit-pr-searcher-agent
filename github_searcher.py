@@ -204,44 +204,51 @@ class GitHubSearcher:
         logger.info(f"文件过滤后剩余 {len(filtered_items)} 个结果")
         return filtered_items
     
-    def _check_files_match_patterns(self, files: List[str], patterns: List[re.Pattern]) -> bool:
-        """检查文件列表是否满足所有过滤条件
+    # def _check_files_match_patterns(self, files: List[str], patterns: List[re.Pattern]) -> bool:
+    #     """检查文件列表是否满足所有过滤条件
         
-        Args:
-            files: 文件列表
-            patterns: 正则表达式模式列表
+    #     Args:
+    #         files: 文件列表
+    #         patterns: 正则表达式模式列表
             
-        Returns:
-            是否满足所有条件
-        """
-        # 对于每个模式，检查是否至少有一个文件匹配
+    #     Returns:
+    #         是否满足所有条件
+    #     """
+    #     # 对于每个模式，检查是否至少有一个文件匹配
+    #     for pattern in patterns:
+    #         if not any(pattern.search(file) for file in files):
+    #             return False
+    #     return True
+
+    def _check_file_match_patterns(self, filename: str, patterns: List[str]) -> bool:
+        """检查文件是否符合过滤条件"""
         for pattern in patterns:
-            if not any(pattern.search(file) for file in files):
-                return False
-        return True
+            if re.search(pattern, filename):
+                return True
+        return False
     
-    def _filter_diff_files(self, files: List[Any]) -> List[Any]:
+    def _filter_diff_files(self, files: List[Any], file_filter_regex: str) -> List[Any]:
         """过滤diff文件"""
         selected_files = []
-        java_file_count = 0
-        
+        file_count = 0
+        patterns = [pattern.strip() for pattern in file_filter_regex.split(';') if pattern.strip()]
         for file in files:
-            # 检查是否是Java文件
-            if file.filename.endswith('.java'):
-                java_file_count += 1
-                
+            # 检查文件是否符合过滤条件
+            if not self._check_file_match_patterns(file.filename, patterns):
+                continue
+            file_count += 1
             # 检查文件大小
             if file.patch and len(file.patch) <= self.max_file_size:
                 selected_files.append(file)
         
-        # 如果Java文件数量超过30，返回空列表
-        if java_file_count > 30:
-            logger.warning(f"跳过过多的Java文件: {java_file_count}个")
+        # 如果文件数量超过30，返回空列表
+        if file_count > 30:
+            logger.warning(f"跳过过多的diff文件: {file_count}个")
             return []
             
         return selected_files
 
-    def _get_commit_diff(self, item: Dict[str, Any]) -> str:
+    def _get_commit_diff(self, item: Dict[str, Any], file_filter_regex: str) -> str:
         """获取commit的diff信息"""
         try:
             g = self._get_github_client()
@@ -252,7 +259,7 @@ class GitHubSearcher:
             commit = repo.get_commit(item['sha'])
             
             # 过滤文件
-            selected_files = self._filter_diff_files(commit.files)
+            selected_files = self._filter_diff_files(commit.files, file_filter_regex)
             
             diff_text = ""
             for file in selected_files:
@@ -266,7 +273,7 @@ class GitHubSearcher:
             logger.warning(f"获取commit diff失败: {e}")
             return ""
     
-    def _get_pr_diff(self, item: Dict[str, Any]) -> str:
+    def _get_pr_diff(self, item: Dict[str, Any], file_filter_regex: str) -> str:
         """获取PR的diff信息"""
         try:
             g = self._get_github_client()
@@ -277,7 +284,7 @@ class GitHubSearcher:
             pr = repo.get_pull(item['number'])
             
             # 过滤文件
-            selected_files = self._filter_diff_files(pr.get_files())
+            selected_files = self._filter_diff_files(pr.get_files(), file_filter_regex)
             
             diff_text = ""
             for file in selected_files:
@@ -292,7 +299,7 @@ class GitHubSearcher:
             return ""
     
     def _ai_filter_items(self, items: List[Dict[str, Any]], 
-                        ai_prompt: str) -> List[Dict[str, Any]]:
+                        ai_prompt: str, file_filter_regex: str) -> List[Dict[str, Any]]:
         """使用AI过滤项目"""
         filtered_items = []
         
@@ -300,13 +307,16 @@ class GitHubSearcher:
             try:
                 # 获取diff信息
                 if item['type'] == 'commit':
-                    diff_content = self._get_commit_diff(item)
+                    diff_content = self._get_commit_diff(item, file_filter_regex)
                 else:
-                    diff_content = self._get_pr_diff(item)
+                    diff_content = self._get_pr_diff(item, file_filter_regex)
                 
                 # 检查diff大小
                 if len(diff_content) > self.max_diff_size:
                     logger.warning(f"跳过过大的diff: {item['title']} (大小: {len(diff_content)})")
+                    continue
+                if len(diff_content) == 0:
+                    logger.warning(f"跳过不符合要求的diff: {item['title']}")
                     continue
                 
                 # 总结diff内容
@@ -369,7 +379,7 @@ class GitHubSearcher:
                 
                 # AI过滤
                 if ai_prompt and filtered_results:
-                    final_results = self._ai_filter_items(filtered_results, ai_prompt)
+                    final_results = self._ai_filter_items(filtered_results, ai_prompt, file_filter_regex)
                 else:
                     final_results = filtered_results
                 
